@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"gophertask/internal/broker"
+	"gophertask/internal/scheduler"
 	"gophertask/internal/tasks"
 	"gophertask/internal/watcher"
 	"log"
@@ -24,6 +25,10 @@ func main() {
 	if err := wm.LoadAndStart(context.Background()); err != nil {
 		log.Printf("⚠️ Failed to load networks: %v", err)
 	}
+
+	// 3. Initialize Scheduler
+	sched := scheduler.NewScheduler(b)
+	go sched.Start(context.Background())
 
 	mux := http.NewServeMux()
 
@@ -249,6 +254,54 @@ func main() {
 			return
 		}
 		json.NewEncoder(w).Encode(list)
+	})
+
+	// --- Scheduler APIs ---
+
+	mux.HandleFunc("/api/jobs/recurring/add", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+		var req struct {
+			Type     string          `json:"type"`
+			Payload  json.RawMessage `json:"payload"`
+			Interval string          `json:"interval"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		job, err := sched.AddJob(r.Context(), req.Type, req.Payload, req.Interval)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		json.NewEncoder(w).Encode(job)
+	})
+
+	mux.HandleFunc("/api/jobs/recurring/list", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(sched.ListJobs())
+	})
+
+	mux.HandleFunc("/api/jobs/recurring/remove", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if err := sched.RemoveJob(r.Context(), req.ID); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Write([]byte(`{"status":"ok"}`))
 	})
 
 	log.Println("Server running on http://localhost:8080")
