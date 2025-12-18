@@ -205,3 +205,34 @@ func (wm *WatcherManager) ListAddresses(ctx context.Context, networkID string) (
 	key := fmt.Sprintf("%s:%s", KeyWatchedAddrs, networkID)
 	return wm.redis.SMembers(ctx, key).Result()
 }
+
+// AddTokenToNetwork registers an ERC-20 token to watch
+func (wm *WatcherManager) AddTokenToNetwork(networkID, symbol, address string, decimals int) error {
+	w, ok := wm.GetWatcher(networkID)
+	if !ok {
+		return fmt.Errorf("network not found")
+	}
+	w.AddToken(symbol, address, decimals)
+	return nil
+}
+
+// ListTokens returns the list of watched tokens for a network
+func (wm *WatcherManager) ListTokens(ctx context.Context, networkID string) ([]TokenConfig, error) {
+	if wm.redis == nil {
+		return []TokenConfig{}, nil
+	}
+	key := fmt.Sprintf("%s:%s", KeyTokens, networkID)
+	vals, err := wm.redis.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	tokens := make([]TokenConfig, 0, len(vals))
+	for _, v := range vals {
+		var config TokenConfig
+		if err := json.Unmarshal([]byte(v), &config); err == nil {
+			tokens = append(tokens, config)
+		}
+	}
+	return tokens, nil
+}

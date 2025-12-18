@@ -220,6 +220,90 @@
             )
         }
 
+        const TokenManager = ({ networkId }) => {
+            const [tokens, setTokens] = useState([]);
+            const [newTok, setNewTok] = useState({ symbol: '', address: '', decimals: 18 });
+
+            const fetchTokens = async () => {
+                if (!networkId) {
+                    setTokens([]);
+                    return;
+                }
+                const res = await fetch(`/api/tokens/list?network_id=${networkId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setTokens(data || []);
+                }
+            };
+
+            const add = async () => {
+                if (!newTok.symbol || !newTok.address || !networkId) return;
+                await fetch('/api/tokens/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...newTok, network_id: networkId, decimals: parseInt(newTok.decimals) })
+                });
+                setNewTok({ symbol: '', address: '', decimals: 18 });
+                fetchTokens();
+            }
+
+            useEffect(() => {
+                fetchTokens();
+            }, [networkId]);
+
+            if (!networkId) return null;
+
+            return (
+                <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 mt-6">
+                    <h3 className="text-lg font-semibold mb-4 text-white">Token Registry <span className="text-xs font-normal text-gray-500 ml-2">(ERC-20)</span></h3>
+
+                    <div className="flex gap-2 mb-4 items-end">
+                        <div className="flex-1">
+                            <label className="text-[10px] text-gray-500 uppercase font-bold">Symbol</label>
+                            <input
+                                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                                placeholder="USDT"
+                                value={newTok.symbol}
+                                onChange={e => setNewTok({ ...newTok, symbol: e.target.value })}
+                            />
+                        </div>
+                        <div className="flex-[2]">
+                            <label className="text-[10px] text-gray-500 uppercase font-bold">Contract Address</label>
+                            <input
+                                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500 font-mono"
+                                placeholder="0x..."
+                                value={newTok.address}
+                                onChange={e => setNewTok({ ...newTok, address: e.target.value })}
+                            />
+                        </div>
+                        <div className="w-20">
+                            <label className="text-[10px] text-gray-500 uppercase font-bold">Decimals</label>
+                            <input
+                                type="number"
+                                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                                value={newTok.decimals}
+                                onChange={e => setNewTok({ ...newTok, decimals: e.target.value })}
+                            />
+                        </div>
+                        <button onClick={add} className="bg-purple-600 px-4 py-2 rounded text-sm font-medium hover:bg-purple-500 h-[38px]">Add</button>
+                    </div>
+
+                    <ul className="space-y-2 max-h-[200px] overflow-auto">
+                        {tokens.map(t => (
+                            <li key={t.address} className="flex justify-between items-center bg-gray-900/50 p-2 rounded px-3 border border-gray-800">
+                                <div className="flex items-center gap-3">
+                                    <span className="font-bold text-purple-400">{t.symbol}</span>
+                                    <span className="font-mono text-xs text-gray-500">{t.address.slice(0, 8)}...{t.address.slice(-6)}</span>
+                                </div>
+                                <span className="text-xs text-gray-600 bg-gray-900 px-2 py-1 rounded">Dec: {t.decimals}</span>
+                            </li>
+                        ))}
+                        {tokens.length === 0 && <li className="text-gray-500 text-sm">No tokens registered.</li>}
+                    </ul>
+                </div>
+            )
+        }
+
         const LiveLogs = () => {
             const [logs, setLogs] = useState([]);
 
@@ -444,9 +528,14 @@
                                                                 {task.type === 'ethereum:transaction_found' && (
                                                                     <span>
                                                                         {task.result.network && <span className="bg-purple-500/20 text-purple-400 px-1 rounded mr-1">{task.result.network}</span>}
+                                                                        <span className={`font-bold mr-1 ${task.result.asset_type === 'ERC20' ? 'text-yellow-400' : 'text-blue-400'}`}>
+                                                                            {task.result.asset_type || 'ETH'} ({task.result.symbol || 'ETH'})
+                                                                        </span>
                                                                         <span className={task.result.direction === 'IN' ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{task.result.direction}</span>
                                                                         <span className="mx-1 text-gray-500">|</span>
                                                                         Block: {task.result.block}
+                                                                        <br />
+                                                                        <span className="text-gray-300">Val: {task.result.value}</span>
                                                                         <br />
                                                                         {(task.result.from || "").slice(0, 8)}... → {(task.result.to || "").slice(0, 8)}...
                                                                     </span>
@@ -479,6 +568,7 @@
                         <div className="space-y-8">
                             <NetworkManager selectedId={selectedNetworkId} onSelect={setSelectedNetworkId} />
                             <WatchListManager networkId={selectedNetworkId} />
+                            <TokenManager networkId={selectedNetworkId} />
                             <LiveLogs />
                         </div>
                     </div>

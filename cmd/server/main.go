@@ -206,6 +206,51 @@ func main() {
 		json.NewEncoder(w).Encode(logs)
 	})
 
+	// --- Token Management APIs ---
+
+	mux.HandleFunc("/api/tokens/add", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+		var req struct {
+			NetworkID string `json:"network_id"`
+			Symbol    string `json:"symbol"`
+			Address   string `json:"address"`
+			Decimals  int    `json:"decimals"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		if req.NetworkID == "" || req.Address == "" {
+			http.Error(w, "network_id and address required", 400)
+			return
+		}
+
+		if err := wm.AddTokenToNetwork(req.NetworkID, req.Symbol, req.Address, req.Decimals); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	mux.HandleFunc("/api/tokens/list", func(w http.ResponseWriter, r *http.Request) {
+		networkID := r.URL.Query().Get("network_id")
+		if networkID == "" {
+			http.Error(w, "network_id required", 400)
+			return
+		}
+
+		list, err := wm.ListTokens(r.Context(), networkID)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		json.NewEncoder(w).Encode(list)
+	})
+
 	log.Println("Server running on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatal(err)
