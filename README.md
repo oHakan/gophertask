@@ -4,7 +4,7 @@
 
 Features a real-time **Dashboard** to monitor queue depth, active workers, and job statuses.
 
-![GopherTask Dashboard](https://via.placeholder.com/800x400?text=GopherTask+Dashboard+Preview)
+![GopherTask Dashboard](https://raw.githubusercontent.com/oHakan/gophertask/refs/heads/main/cmd/server/static/public/dashboard.png)
 
 ## 🌟 Features
 
