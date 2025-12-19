@@ -16,13 +16,14 @@ import (
 const KeySchedules = "gophertask:schedules"
 
 type ScheduledJob struct {
-	ID        string          `json:"id"`
-	Type      string          `json:"type"`
-	Payload   json.RawMessage `json:"payload"`
-	Interval  string          `json:"interval"` // e.g. "1m", "5m"
-	NextRun   int64           `json:"next_run"` // Unix Timestamp
-	LastRun   int64           `json:"last_run"`
-	CreatedAt time.Time       `json:"created_at"`
+	ID        string                `json:"id"`
+	Type      string                `json:"type"`
+	Payload   json.RawMessage       `json:"payload"`
+	Interval  string                `json:"interval"` // e.g. "1m", "5m"
+	NextRun   int64                 `json:"next_run"` // Unix Timestamp
+	LastRun   int64                 `json:"last_run"`
+	Webhooks  []tasks.WebhookConfig `json:"webhooks,omitempty"`
+	CreatedAt time.Time             `json:"created_at"`
 }
 
 type RedisClientProvider interface {
@@ -83,6 +84,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 				ID:        uuid.New().String(),
 				Type:      job.Type,
 				Payload:   job.Payload,
+				Webhooks:  job.Webhooks,
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 				State:     tasks.StatePending,
@@ -111,7 +113,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) AddJob(ctx context.Context, jobType string, payload json.RawMessage, interval string) (*ScheduledJob, error) {
+func (s *Scheduler) AddJob(ctx context.Context, jobType string, payload json.RawMessage, interval string, webhooks []tasks.WebhookConfig) (*ScheduledJob, error) {
 	// Validate interval
 	if _, err := time.ParseDuration(interval); err != nil {
 		return nil, fmt.Errorf("invalid interval format (e.g. 1m, 1h): %v", err)
@@ -122,6 +124,7 @@ func (s *Scheduler) AddJob(ctx context.Context, jobType string, payload json.Raw
 		Type:      jobType,
 		Payload:   payload,
 		Interval:  interval,
+		Webhooks:  webhooks,
 		CreatedAt: time.Now(),
 		NextRun:   time.Now().Add(1 * time.Second).Unix(), // Run almost immediately
 	}

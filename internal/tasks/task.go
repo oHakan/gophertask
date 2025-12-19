@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+type WebhookConfig struct {
+	URL     string            `json:"url"`
+	Method  string            `json:"method"`
+	Headers map[string]string `json:"headers"`
+}
+
 type State string
 
 const (
@@ -21,6 +27,7 @@ type Task struct {
 	State     State           `json:"state"`
 	Err       string          `json:"error,omitempty"`
 	Result    json.RawMessage `json:"result,omitempty"`
+	Webhooks  []WebhookConfig `json:"webhooks,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }

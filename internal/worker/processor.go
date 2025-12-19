@@ -1,10 +1,12 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"gophertask/internal/tasks"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -106,5 +108,59 @@ func (p *Processor) processTask(t *tasks.Task) {
 	} else {
 		log.Printf("✅ Task %s completed in %v", t.ID, duration)
 		p.broker.MarkCompleted(t.ID, res)
+	}
+
+	// Trigger Webhooks
+	if len(t.Webhooks) > 0 {
+		go p.triggerWebhooks(t, res, err)
+	}
+}
+
+func (p *Processor) triggerWebhooks(t *tasks.Task, result interface{}, taskErr error) {
+	payload := map[string]interface{}{
+		"task_id":   t.ID,
+		"task_type": t.Type,
+		"status":    "completed",
+		"result":    result,
+		"timestamp": time.Now(),
+	}
+
+	if taskErr != nil {
+		payload["status"] = "failed"
+		payload["error"] = taskErr.Error()
+	}
+
+	body, _ := json.Marshal(payload)
+
+	for _, wh := range t.Webhooks {
+		go func(w tasks.WebhookConfig) {
+			log.Printf("🔗 Triggering webhook: %s %s", w.Method, w.URL)
+
+			req, err := http.NewRequest(w.Method, w.URL, bytes.NewBuffer(body))
+			if err != nil {
+				log.Printf("⚠️ Failed to create webhook request: %v", err)
+				return
+			}
+
+			for k, v := range w.Headers {
+				req.Header.Set(k, v)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", "GopherTask-Worker/1.0")
+
+			client := &http.Client{Timeout: 10 * time.Second}
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("❌ Webhook failed (%s): %v", w.URL, err)
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode >= 400 {
+				log.Printf("⚠️ Webhook returned error status (%s): %s", w.URL, resp.Status)
+			} else {
+				log.Printf("✅ Webhook sent successfully (%s)", w.URL)
+			}
+		}(wh)
 	}
 }

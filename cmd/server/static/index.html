@@ -383,6 +383,15 @@
             const [type, setType] = useState('email:send');
             const [formData, setFormData] = useState({ to: '', subject: '', address: '', symbol: '' });
             const [interval, setInterval] = useState("");
+            const [webhooks, setWebhooks] = useState([{ url: '', method: 'POST', headers: '' }]);
+
+            const addWebhook = () => setWebhooks([...webhooks, { url: '', method: 'POST', headers: '' }]);
+            const removeWebhook = (index) => setWebhooks(webhooks.filter((_, i) => i !== index));
+            const updateWebhook = (index, field, value) => {
+                const newWebhooks = [...webhooks];
+                newWebhooks[index][field] = value;
+                setWebhooks(newWebhooks);
+            };
 
             const handleSubmit = () => {
                 let payload = {};
@@ -393,14 +402,28 @@
                 } else if (type === 'crypto:get_price') {
                     payload = { symbol: formData.symbol };
                 }
-                onCreate(type, payload, interval);
+
+                // Process Webhooks
+                const validWebhooks = webhooks
+                    .filter(w => w.url)
+                    .map(w => {
+                        let headers = {};
+                        try {
+                            if (w.headers) headers = JSON.parse(w.headers);
+                        } catch (e) { console.error("Invalid JSON headers", e); }
+                        return { url: w.url, method: w.method, headers };
+                    });
+
+                onCreate(type, payload, interval, validWebhooks);
                 setFormData({ to: '', subject: '', address: '', symbol: '' }); // Reset
                 setInterval("");
+                setWebhooks([{ url: '', method: 'POST', headers: '' }]);
             };
 
             return (
                 <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-8">
                     <h3 className="text-lg font-semibold mb-4 text-white">Create New Job</h3>
+
                     <div className="flex gap-4 mb-4">
                         <button
                             onClick={() => setType('email:send')}
@@ -497,6 +520,46 @@
                                 {loading ? 'Processing...' : (interval ? 'Schedule Job' : 'Dispatch Job')}
                             </button>
                         </div>
+
+                        {/* Webhook Configuration */}
+                        <div className="border-t border-gray-700 pt-4 mt-2">
+                            <h4 className="text-sm font-semibold text-gray-400 mb-2">Webhooks (Optional)</h4>
+                            {webhooks.map((wh, idx) => (
+                                <div key={idx} className="flex gap-2 mb-2 items-start">
+                                    <div className="w-24">
+                                        <select
+                                            className="w-full bg-gray-900 border border-gray-600 rounded p-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                                            value={wh.method}
+                                            onChange={e => updateWebhook(idx, 'method', e.target.value)}
+                                        >
+                                            <option value="GET">GET</option>
+                                            <option value="POST">POST</option>
+                                            <option value="PUT">PUT</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex-1">
+                                        <input
+                                            className="w-full bg-gray-900 border border-gray-600 rounded p-1.5 text-xs focus:border-blue-500 focus:outline-none placeholder-gray-600"
+                                            placeholder="https://webhook.site/..."
+                                            value={wh.url}
+                                            onChange={e => updateWebhook(idx, 'url', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <input
+                                            className="w-full bg-gray-900 border border-gray-600 rounded p-1.5 text-xs focus:border-blue-500 focus:outline-none font-mono placeholder-gray-600"
+                                            placeholder='{"Authorization": "Bearer..."}'
+                                            value={wh.headers}
+                                            onChange={e => updateWebhook(idx, 'headers', e.target.value)}
+                                        />
+                                    </div>
+                                    <button onClick={() => removeWebhook(idx)} className="text-red-500 hover:text-red-400 px-2 py-1">×</button>
+                                </div>
+                            ))}
+                            <button onClick={addWebhook} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                                + Add Webhook
+                            </button>
+                        </div>
                     </div>
                 </div>
             );
@@ -529,10 +592,10 @@
                 return () => clearInterval(interval);
             }, []);
 
-            const createTask = async (type, payload, interval) => {
+            const createTask = async (type, payload, interval, webhooks) => {
                 setLoading(true);
                 const url = interval ? '/api/jobs/recurring/add' : '/api/tasks';
-                const body = interval ? { type, payload, interval } : { type, payload };
+                const body = interval ? { type, payload, interval, webhooks } : { type, payload, webhooks };
 
                 await fetch(url, {
                     method: 'POST',

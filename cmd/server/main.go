@@ -39,8 +39,9 @@ func main() {
 	mux.HandleFunc("/api/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			var t struct {
-				Type    string          `json:"type"`
-				Payload json.RawMessage `json:"payload"`
+				Type     string                `json:"type"`
+				Payload  json.RawMessage       `json:"payload"`
+				Webhooks []tasks.WebhookConfig `json:"webhooks"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 				http.Error(w, err.Error(), 400)
@@ -50,6 +51,7 @@ func main() {
 				ID:        uuid.New().String(),
 				Type:      t.Type,
 				Payload:   t.Payload,
+				Webhooks:  t.Webhooks,
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 				State:     tasks.StatePending,
@@ -264,16 +266,17 @@ func main() {
 			return
 		}
 		var req struct {
-			Type     string          `json:"type"`
-			Payload  json.RawMessage `json:"payload"`
-			Interval string          `json:"interval"`
+			Type     string                `json:"type"`
+			Payload  json.RawMessage       `json:"payload"`
+			Interval string                `json:"interval"`
+			Webhooks []tasks.WebhookConfig `json:"webhooks"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		job, err := sched.AddJob(r.Context(), req.Type, req.Payload, req.Interval)
+		job, err := sched.AddJob(r.Context(), req.Type, req.Payload, req.Interval, req.Webhooks)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
